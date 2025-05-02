@@ -9,6 +9,9 @@ which is currently in Private Preview. The bot facilitates conversations with Ge
 Databricks' AI assistant, through a chat interface.
 
 Note: This is experimental code and is not intended for production use.
+
+
+Update on May 02 to reflect Databricks API Changes https://www.databricks.com/blog/genie-conversation-apis-public-preview
 """
 
 import os
@@ -22,9 +25,10 @@ from botbuilder.schema import Activity, ChannelAccount
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.dashboards import GenieAPI
 import asyncio
+import requests
 
 # Log
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 # Env vars
@@ -43,6 +47,99 @@ workspace_client = WorkspaceClient(
 
 genie_api = GenieAPI(workspace_client.api_client)
 
+def get_attachment_query_result(space_id, conversation_id, message_id, attachment_id):
+    url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}"
+    headers = {
+        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    response = requests.get(url, headers=headers)
+    if response.status_code != 200:
+        logger.error(f"Message endpoint returned status {response.status_code}: {response.text}")
+        return {}
+    
+    try:
+        message_data = response.json()
+        logger.info(f"Message data: {message_data}")
+        
+        statement_id = None
+        if "attachments" in message_data:
+            for attachment in message_data["attachments"]:
+                if attachment.get("attachment_id") == attachment_id:
+                    if "query" in attachment and "statement_id" in attachment["query"]:
+                        statement_id = attachment["query"]["statement_id"]
+                        break
+        
+        if not statement_id:
+            logger.error("No statement_id found in message data")
+            return {}
+            
+        query_url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}/attachments/{attachment_id}/query-result"
+        query_headers = {
+            "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+            "Content-Type": "application/json",
+            "X-Databricks-Statement-Id": statement_id
+        }
+        
+        query_response = requests.get(query_url, headers=query_headers)
+        if query_response.status_code != 200:
+            logger.error(f"Query result endpoint returned status {query_response.status_code}: {query_response.text}")
+            return {}
+            
+        if not query_response.text.strip():
+            logger.error(f"Empty response from Genie API: {query_response.status_code}")
+            return {}
+            
+        result = query_response.json()
+        logger.info(f"Raw query result response: {result}")
+        
+        if isinstance(result, dict):
+            if "data_array" in result:
+                if not isinstance(result["data_array"], list):
+                    result["data_array"] = []
+            if "schema" in result:
+                if not isinstance(result["schema"], dict):
+                    result["schema"] = {}
+                    
+            if "schema" in result and "columns" in result["schema"]:
+                if not isinstance(result["schema"]["columns"], list):
+                    result["schema"]["columns"] = []
+                    
+            if "data_array" in result and result["data_array"] and "schema" not in result:
+                first_row = result["data_array"][0]
+                if isinstance(first_row, dict):
+                    result["schema"] = {
+                        "columns": [{"name": key} for key in first_row.keys()]
+                    }
+                elif isinstance(first_row, list):
+                    result["schema"] = {
+                        "columns": [{"name": f"Column {i}"} for i in range(len(first_row))]
+                    }
+                    
+        return result
+    except Exception as e:
+        logger.error(f"Failed to process Genie API response: {e}, text: {response.text}")
+        return {}
+
+def execute_attachment_query(space_id, conversation_id, message_id, attachment_id, payload):
+    url = f"{DATABRICKS_HOST}/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}/attachments/{attachment_id}/execute-query"
+    headers = {
+        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(url, headers=headers, json=payload)
+    if response.status_code != 200:
+        logger.error(f"Execute query endpoint returned status {response.status_code}: {response.text}")
+        return {}
+    if not response.text.strip():
+        logger.error(f"Empty response from Genie API: {response.status_code}")
+        return {}
+    try:
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to parse JSON from Genie API: {e}, text: {response.text}")
+        return {}
+
 async def ask_genie(question: str, space_id: str, conversation_id: Optional[str] = None) -> tuple[str, str]:
     try:
         loop = asyncio.get_running_loop()
@@ -52,34 +149,54 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
         else:
             initial_message = await loop.run_in_executor(None, genie_api.create_message_and_wait, space_id, conversation_id, question)
 
-        query_result = None
-        if initial_message.query_result is not None:
-            query_result = await loop.run_in_executor(None, genie_api.get_message_query_result,
-                space_id, initial_message.conversation_id, initial_message.id)
-
         message_content = await loop.run_in_executor(None, genie_api.get_message,
-            space_id, initial_message.conversation_id, initial_message.id)
+            space_id, initial_message.conversation_id, initial_message.message_id)
 
-        if query_result and query_result.statement_response:
-            results = await loop.run_in_executor(None, workspace_client.statement_execution.get_statement,
-                query_result.statement_response.statement_id)
-            
-            query_description = ""
-            for attachment in message_content.attachments:
-                if attachment.query and attachment.query.description:
-                    query_description = attachment.query.description
-                    break
-
-            return json.dumps({
-                "columns": results.manifest.schema.as_dict(),
-                "data": results.result.as_dict(),
-                "query_description": query_description
-            }), conversation_id
+        logger.info(f"Raw message content: {message_content}")
 
         if message_content.attachments:
             for attachment in message_content.attachments:
-                if attachment.text and attachment.text.content:
-                    return json.dumps({"message": attachment.text.content}), conversation_id
+                attachment_id = getattr(attachment, "attachment_id", None)
+                query_obj = getattr(attachment, "query", None)
+                if attachment_id and query_obj:
+                    # Use the new endpoint to get query results
+                    query_result = await loop.run_in_executor(
+                        None,
+                        get_attachment_query_result,
+                        space_id,
+                        initial_message.conversation_id,
+                        initial_message.message_id,
+                        attachment_id
+                    )
+                    logger.info(f"Raw query result: {query_result}")
+                    
+                    query_description = getattr(query_obj, "description", "")
+                    query_result_metadata = getattr(query_obj, "query_result_metadata", {})
+                    statement_id = getattr(query_obj, "statement_id", "")
+                    
+                    if hasattr(query_result_metadata, "__dict__"):
+                        query_result_metadata = query_result_metadata.__dict__
+                    
+                    logger.info(f"Query result metadata: {query_result_metadata}")
+                    logger.info(f"Statement ID: {statement_id}")
+
+                    response_data = {
+                        "query_description": query_description,
+                        "query_result_metadata": query_result_metadata,
+                        "statement_id": statement_id
+                    }
+
+                    if isinstance(query_result, dict) and "statement_response" in query_result:
+                        response_data["statement_response"] = query_result["statement_response"]
+                        logger.info(f"Added statement_response to response: {response_data['statement_response']}")
+                    else:
+                        logger.error(f"Missing statement_response in query_result: {query_result}")
+
+                    return json.dumps(response_data), conversation_id
+
+                text_obj = getattr(attachment, "text", None)
+                if text_obj and hasattr(text_obj, "content"):
+                    return json.dumps({"message": text_obj.content}), conversation_id
 
         return json.dumps({"message": message_content.content}), conversation_id
     except Exception as e:
@@ -88,20 +205,41 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
 
 def process_query_results(answer_json: Dict) -> str:
     response = ""
+    
+    logger.info(f"Processing answer JSON: {answer_json}")
+    
     if "query_description" in answer_json and answer_json["query_description"]:
         response += f"## Query Description\n\n{answer_json['query_description']}\n\n"
 
-    if "columns" in answer_json and "data" in answer_json:
-        response += "## Query Results\n\n"
-        columns = answer_json["columns"]
-        data = answer_json["data"]
-        if isinstance(columns, dict) and "columns" in columns:
-            header = "| " + " | ".join(col["name"] for col in columns["columns"]) + " |"
-            separator = "|" + "|".join(["---" for _ in columns["columns"]]) + "|"
+    if "query_result_metadata" in answer_json:
+        metadata = answer_json["query_result_metadata"]
+        if isinstance(metadata, dict):
+            if "row_count" in metadata:
+                response += f"**Row Count:** {metadata['row_count']}\n\n"
+            if "execution_time_ms" in metadata:
+                response += f"**Execution Time:** {metadata['execution_time_ms']}ms\n\n"
+
+    if "statement_response" in answer_json:
+        statement_response = answer_json["statement_response"]
+        logger.info(f"Found statement_response: {statement_response}")
+        
+        if "result" in statement_response and "data_array" in statement_response["result"]:
+            response += "## Query Results\n\n"
+            
+            schema = statement_response.get("manifest", {}).get("schema", {})
+            columns = schema.get("columns", [])
+            logger.info(f"Schema columns: {columns}")
+            
+            header = "| " + " | ".join(col["name"] for col in columns) + " |"
+            separator = "|" + "|".join(["---" for _ in columns]) + "|"
             response += header + "\n" + separator + "\n"
-            for row in data["data_array"]:
+            
+            data_array = statement_response["result"]["data_array"]
+            logger.info(f"Data array: {data_array}")
+            
+            for row in data_array:
                 formatted_row = []
-                for value, col in zip(row, columns["columns"]):
+                for value, col in zip(row, columns):
                     if value is None:
                         formatted_value = "NULL"
                     elif col["type_name"] in ["DECIMAL", "DOUBLE", "FLOAT"]:
@@ -113,11 +251,12 @@ def process_query_results(answer_json: Dict) -> str:
                     formatted_row.append(formatted_value)
                 response += "| " + " | ".join(formatted_row) + " |\n"
         else:
-            response += f"Unexpected column format: {columns}\n\n"
+            logger.error(f"Missing result or data_array in statement_response: {statement_response}")
     elif "message" in answer_json:
         response += f"{answer_json['message']}\n\n"
     else:
         response += "No data available.\n\n"
+        logger.error("No statement_response or message found in answer_json")
     
     return response
 
