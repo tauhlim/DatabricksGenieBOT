@@ -60,6 +60,7 @@ workspace_client = WorkspaceClient(
 
 genie_api = GenieAPI(workspace_client.api_client)
 
+
 @dataclass
 class GenieResult:
     query_description: str | None = None
@@ -212,7 +213,7 @@ def process_query_results(answer: GenieResult) -> Activity:
         logger.info(f"Found statement_response: {statement_response}")
 
         if statement_response.result and statement_response.result.data_array:
-            
+
             manifest = statement_response.manifest
             columns = []
 
@@ -227,7 +228,24 @@ def process_query_results(answer: GenieResult) -> Activity:
             data_array = statement_response.result.data_array
             logger.info(f"Data array: {data_array}")
 
-            row_output = []
+            row_output = [
+                {
+                    "type": "TableRow",
+                    "cells": [
+                        {
+                            "type": "TableCell",
+                            "items": [
+                                {
+                                    "type": "TextBlock",
+                                    "text": col.name,
+                                    "wrap": True,
+                                }
+                            ]
+                        }
+                        for col in columns
+                    ]
+                }
+            ]
 
             for row in data_array:
                 for value, col in zip(row, columns):
@@ -316,13 +334,16 @@ class MyBot(ActivityHandler):
         conversation_id = self.conversation_ids.get(user_id)
         space_id = self.space_ids.get(user_id)
         if not space_id or "@" in question.lower():
-            space_id = get_space_id(question)
-            if space_id == SPACE_NOT_FOUND:
+            new_space_id = get_space_id(question)
+            if new_space_id == SPACE_NOT_FOUND:
                 await turn_context.send_activity(SPACE_NOT_FOUND)
                 return
-            self.space_ids[user_id] = space_id
-            # Reset conversation ID for the new space
-            self.conversation_ids[user_id] = None
+            # users want to switch spaces
+            if new_space_id != space_id:
+                space_id = new_space_id
+                conversation_id = None
+                self.space_ids[user_id] = new_space_id
+                self.conversation_ids[user_id] = None
         if SWITCHING_MESSAGE in question.lower():
             space_id = get_space_id(question)
             if space_id == SPACE_NOT_FOUND:
