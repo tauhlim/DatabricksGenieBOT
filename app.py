@@ -22,7 +22,7 @@ from aiohttp import web
 from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, ActivityHandler, TurnContext, CardFactory
 from botbuilder.schema import Activity, ActivityTypes, ChannelAccount
 from databricks.sdk import WorkspaceClient, GenieAPI
-from databricks.sdk.service.sql import StatementResponse, ResultSchema
+from databricks.sdk.service.sql import StatementResponse
 from databricks.sdk.service.dashboards import GenieResultMetadata
 import asyncio
 
