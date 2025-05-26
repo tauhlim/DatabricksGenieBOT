@@ -19,12 +19,14 @@ This experimental code creates a Genie BOT in Databricks using the Genie API. It
 ## Implementation Details
 
 The bot is built using:
+
 - Python
 - Bot Framework SDK
 - aiohttp for asynchronous HTTP requests
 - Databricks Genie API (Private Preview)
 
 The main components of the system are:
+
 - A `genie_conversation` function that handles the communication with the Genie API
 - A `MyBot` class that processes incoming messages and manages user conversations
 - An aiohttp web application that serves as the entry point for bot messages
