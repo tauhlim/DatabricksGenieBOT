@@ -47,7 +47,7 @@ with open('spaces.json') as f:
 
 REVERSE_SPACES = {v: k for k, v in SPACES.items()}
 
-LIST_SPACES = "\n".join([f"@{space_name}" for space_name in SPACES.keys()])
+LIST_SPACES = ", ".join([f"@{space_name}" for space_name in SPACES.keys()])
 SPACE_NOT_FOUND = f"Genie space not found. Please use {LIST_SPACES} to specify the space."
 
 workspace_client = WorkspaceClient(
