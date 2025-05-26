@@ -248,8 +248,8 @@ def process_query_results(answer: GenieResult) -> Activity:
             ]
 
             for row in data_array:
+                cell_output = []
                 for value, col in zip(row, columns):
-                    cell_output = []
                     if value is None:
                         formatted_value = "NULL"
                     elif col.type_name in ["DECIMAL", "DOUBLE", "FLOAT"]:
