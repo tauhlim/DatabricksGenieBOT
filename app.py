@@ -21,10 +21,8 @@ from dotenv import load_dotenv
 from aiohttp import web
 from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, ActivityHandler, TurnContext
 from botbuilder.schema import Activity, ChannelAccount
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.dashboards import GenieAPI
+from databricks.sdk import WorkspaceClient, GenieAPI
 import asyncio
-import requests
 
 # Log
 logging.basicConfig(level=logging.ERROR)
@@ -33,111 +31,38 @@ logger = logging.getLogger(__name__)
 # Env vars
 load_dotenv()
 
-DATABRICKS_SPACE_ID = os.getenv("DATABRICKS_SPACE_ID")
 DATABRICKS_HOST = os.getenv("DATABRICKS_HOST")
-DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN")
-APP_ID = os.getenv("MicrosoftAppId", "")
-APP_PASSWORD = os.getenv("MicrosoftAppPassword", "")
+DATABRICKS_CLIENT_ID = os.getenv("DATABRICKS_CLIENT_ID")
+DATABRICKS_CLIENT_SECRET = os.getenv("DATABRICKS_CLIENT_SECRET")
+APP_ID = os.getenv("APP_ID", "")
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+
+# Constants
+WELCOME_MESSAGE = "Welcome to the Data Query Bot!"
+WAITING_MESSAGE = "Please wait while I process your request..."
+SPACE_NOT_FOUND = "Genie not found. Please use @bakehouse or @taxi to specify the space."
+
+# Spaces mapping in json file
+with open('spaces.json') as f:
+    SPACES = json.load(f)
+
+REVERSE_SPACES = {v: k for k, v in SPACES.items()}
 
 workspace_client = WorkspaceClient(
     host=DATABRICKS_HOST,
-    token=DATABRICKS_TOKEN
+    client_id=DATABRICKS_CLIENT_ID,
+    client_secret=DATABRICKS_CLIENT_SECRET,
 )
 
 genie_api = GenieAPI(workspace_client.api_client)
 
-def get_attachment_query_result(space_id, conversation_id, message_id, attachment_id):
-    url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}"
-    headers = {
-        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    response = requests.get(url, headers=headers)
-    if response.status_code != 200:
-        logger.error(f"Message endpoint returned status {response.status_code}: {response.text}")
-        return {}
-    
-    try:
-        message_data = response.json()
-        logger.info(f"Message data: {message_data}")
-        
-        statement_id = None
-        if "attachments" in message_data:
-            for attachment in message_data["attachments"]:
-                if attachment.get("attachment_id") == attachment_id:
-                    if "query" in attachment and "statement_id" in attachment["query"]:
-                        statement_id = attachment["query"]["statement_id"]
-                        break
-        
-        if not statement_id:
-            logger.error("No statement_id found in message data")
-            return {}
-            
-        query_url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}/attachments/{attachment_id}/query-result"
-        query_headers = {
-            "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-            "Content-Type": "application/json",
-            "X-Databricks-Statement-Id": statement_id
-        }
-        
-        query_response = requests.get(query_url, headers=query_headers)
-        if query_response.status_code != 200:
-            logger.error(f"Query result endpoint returned status {query_response.status_code}: {query_response.text}")
-            return {}
-            
-        if not query_response.text.strip():
-            logger.error(f"Empty response from Genie API: {query_response.status_code}")
-            return {}
-            
-        result = query_response.json()
-        logger.info(f"Raw query result response: {result}")
-        
-        if isinstance(result, dict):
-            if "data_array" in result:
-                if not isinstance(result["data_array"], list):
-                    result["data_array"] = []
-            if "schema" in result:
-                if not isinstance(result["schema"], dict):
-                    result["schema"] = {}
-                    
-            if "schema" in result and "columns" in result["schema"]:
-                if not isinstance(result["schema"]["columns"], list):
-                    result["schema"]["columns"] = []
-                    
-            if "data_array" in result and result["data_array"] and "schema" not in result:
-                first_row = result["data_array"][0]
-                if isinstance(first_row, dict):
-                    result["schema"] = {
-                        "columns": [{"name": key} for key in first_row.keys()]
-                    }
-                elif isinstance(first_row, list):
-                    result["schema"] = {
-                        "columns": [{"name": f"Column {i}"} for i in range(len(first_row))]
-                    }
-                    
-        return result
-    except Exception as e:
-        logger.error(f"Failed to process Genie API response: {e}, text: {response.text}")
-        return {}
 
-def execute_attachment_query(space_id, conversation_id, message_id, attachment_id, payload):
-    url = f"{DATABRICKS_HOST}/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}/attachments/{attachment_id}/execute-query"
-    headers = {
-        "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    response = requests.post(url, headers=headers, json=payload)
-    if response.status_code != 200:
-        logger.error(f"Execute query endpoint returned status {response.status_code}: {response.text}")
-        return {}
-    if not response.text.strip():
-        logger.error(f"Empty response from Genie API: {response.status_code}")
-        return {}
-    try:
-        return response.json()
-    except Exception as e:
-        logger.error(f"Failed to parse JSON from Genie API: {e}, text: {response.text}")
-        return {}
+def get_space_id(question: str) -> str:
+    # Select the right space based on the question
+    for space_name, space_id in SPACES.items():
+        if "@" + space_name.lower() in question.lower():
+            return space_id
+        return SPACE_NOT_FOUND
 
 async def ask_genie(question: str, space_id: str, conversation_id: Optional[str] = None) -> tuple[str, str]:
     try:
@@ -149,7 +74,7 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
             initial_message = await loop.run_in_executor(None, genie_api.create_message_and_wait, space_id, conversation_id, question)
 
         message_content = await loop.run_in_executor(None, genie_api.get_message,
-            space_id, initial_message.conversation_id, initial_message.message_id)
+                                                     space_id, initial_message.conversation_id, initial_message.message_id)
 
         logger.info(f"Raw message content: {message_content}")
 
@@ -161,22 +86,24 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
                     # Use the new endpoint to get query results
                     query_result = await loop.run_in_executor(
                         None,
-                        get_attachment_query_result,
+                        genie_api.get_message_query_result,
                         space_id,
                         initial_message.conversation_id,
                         initial_message.message_id,
                         attachment_id
                     )
                     logger.info(f"Raw query result: {query_result}")
-                    
+
                     query_description = getattr(query_obj, "description", "")
-                    query_result_metadata = getattr(query_obj, "query_result_metadata", {})
+                    query_result_metadata = getattr(
+                        query_obj, "query_result_metadata", {})
                     statement_id = getattr(query_obj, "statement_id", "")
-                    
+
                     if hasattr(query_result_metadata, "__dict__"):
                         query_result_metadata = query_result_metadata.__dict__
-                    
-                    logger.info(f"Query result metadata: {query_result_metadata}")
+
+                    logger.info(
+                        f"Query result metadata: {query_result_metadata}")
                     logger.info(f"Statement ID: {statement_id}")
 
                     response_data = {
@@ -187,9 +114,11 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
 
                     if isinstance(query_result, dict) and "statement_response" in query_result:
                         response_data["statement_response"] = query_result["statement_response"]
-                        logger.info(f"Added statement_response to response: {response_data['statement_response']}")
+                        logger.info(
+                            f"Added statement_response to response: {response_data['statement_response']}")
                     else:
-                        logger.error(f"Missing statement_response in query_result: {query_result}")
+                        logger.error(
+                            f"Missing statement_response in query_result: {query_result}")
 
                     return json.dumps(response_data), conversation_id
 
@@ -202,11 +131,12 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
         logger.error(f"Error in ask_genie: {str(e)}")
         return json.dumps({"error": "An error occurred while processing your request."}), conversation_id
 
+
 def process_query_results(answer_json: Dict) -> str:
     response = ""
-    
+
     logger.info(f"Processing answer JSON: {answer_json}")
-    
+
     if "query_description" in answer_json and answer_json["query_description"]:
         response += f"## Query Description\n\n{answer_json['query_description']}\n\n"
 
@@ -221,21 +151,21 @@ def process_query_results(answer_json: Dict) -> str:
     if "statement_response" in answer_json:
         statement_response = answer_json["statement_response"]
         logger.info(f"Found statement_response: {statement_response}")
-        
+
         if "result" in statement_response and "data_array" in statement_response["result"]:
             response += "## Query Results\n\n"
-            
+
             schema = statement_response.get("manifest", {}).get("schema", {})
             columns = schema.get("columns", [])
             logger.info(f"Schema columns: {columns}")
-            
+
             header = "| " + " | ".join(col["name"] for col in columns) + " |"
             separator = "|" + "|".join(["---" for _ in columns]) + "|"
             response += header + "\n" + separator + "\n"
-            
+
             data_array = statement_response["result"]["data_array"]
             logger.info(f"Data array: {data_array}")
-            
+
             for row in data_array:
                 formatted_row = []
                 for value, col in zip(row, columns):
@@ -250,30 +180,42 @@ def process_query_results(answer_json: Dict) -> str:
                     formatted_row.append(formatted_value)
                 response += "| " + " | ".join(formatted_row) + " |\n"
         else:
-            logger.error(f"Missing result or data_array in statement_response: {statement_response}")
+            logger.error(
+                f"Missing result or data_array in statement_response: {statement_response}")
     elif "message" in answer_json:
         response += f"{answer_json['message']}\n\n"
     else:
         response += "No data available.\n\n"
         logger.error("No statement_response or message found in answer_json")
-    
+
     return response
 
-SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD
-                                       )
+
+SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
 
 class MyBot(ActivityHandler):
     def __init__(self):
         self.conversation_ids: Dict[str, str] = {}
+        self.space_ids: Dict[str, str] = {}
 
     async def on_message_activity(self, turn_context: TurnContext):
+        turn_context.send_activity(WAITING_MESSAGE)
+        logger.info(f"Received message: {turn_context.activity.text}")
         question = turn_context.activity.text
         user_id = turn_context.activity.from_property.id
         conversation_id = self.conversation_ids.get(user_id)
-
+        space_id = self.space_ids.get(user_id)
+        if not space_id or "switch to @" in question.lower():
+            space_id = get_space_id(question)
+            if space_id == SPACE_NOT_FOUND:
+                await turn_context.send_activity(SPACE_NOT_FOUND)
+                return
+            self.space_ids[user_id] = space_id
+        if "switch to @" in question.lower():
+            await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
         try:
-            answer, new_conversation_id = await ask_genie(question, DATABRICKS_SPACE_ID, conversation_id)
+            answer, new_conversation_id = await ask_genie(question, space_id, conversation_id)
             self.conversation_ids[user_id] = new_conversation_id
 
             answer_json = json.loads(answer)
@@ -289,9 +231,11 @@ class MyBot(ActivityHandler):
     async def on_members_added_activity(self, members_added: List[ChannelAccount], turn_context: TurnContext):
         for member in members_added:
             if member.id != turn_context.activity.recipient.id:
-                await turn_context.send_activity("Welcome to the Databricks Genie Bot!")
+                await turn_context.send_activity(WELCOME_MESSAGE)
+
 
 BOT = MyBot()
+
 
 async def messages(req: web.Request) -> web.Response:
     if "application/json" in req.headers["Content-Type"]:
