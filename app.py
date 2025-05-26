@@ -40,13 +40,15 @@ APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 # Constants
 WELCOME_MESSAGE = "Welcome to the Data Query Bot!"
 WAITING_MESSAGE = "Please wait while I process your request..."
-SPACE_NOT_FOUND = "Genie not found. Please use @bakehouse or @taxi to specify the space."
 
 # Spaces mapping in json file
 with open('spaces.json') as f:
     SPACES = json.load(f)
 
 REVERSE_SPACES = {v: k for k, v in SPACES.items()}
+
+LIST_SPACES = "\n".join([f"@{space_name}" for space_name in SPACES.keys()])
+SPACE_NOT_FOUND = f"Genie space not found. Please use {LIST_SPACES} to specify the space."
 
 workspace_client = WorkspaceClient(
     host=DATABRICKS_HOST,
@@ -200,7 +202,7 @@ class MyBot(ActivityHandler):
         self.space_ids: Dict[str, str] = {}
 
     async def on_message_activity(self, turn_context: TurnContext):
-        turn_context.send_activity(WAITING_MESSAGE)
+        await turn_context.send_activity(WAITING_MESSAGE)
         logger.info(f"Received message: {turn_context.activity.text}")
         question = turn_context.activity.text
         user_id = turn_context.activity.from_property.id
@@ -213,7 +215,13 @@ class MyBot(ActivityHandler):
                 return
             self.space_ids[user_id] = space_id
         if "switch to @" in question.lower():
+            space_id = get_space_id(question)
+            if space_id == SPACE_NOT_FOUND:
+                await turn_context.send_activity(SPACE_NOT_FOUND)
+                return
+            self.space_ids[user_id] = space_id
             await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
+            return
         try:
             answer, new_conversation_id = await ask_genie(question, space_id, conversation_id)
             self.conversation_ids[user_id] = new_conversation_id
