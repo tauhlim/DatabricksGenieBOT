@@ -88,7 +88,7 @@ async def ask_genie(question: str, space_id: str, conversation_id: Optional[str]
                     # Use the new endpoint to get query results
                     query_result = await loop.run_in_executor(
                         None,
-                        genie_api.get_message_query_result,
+                        genie_api.get_message_query_result_by_attachment,
                         space_id,
                         initial_message.conversation_id,
                         initial_message.message_id,
