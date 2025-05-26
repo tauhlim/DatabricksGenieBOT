@@ -1,1 +1,0 @@
-az webapp up --name "vn-genie-app" --resource-group "vn-genie-rg" --plan "vn-genie-plan" --runtime "PYTHON:3.11" --sku "B1" --location "southeastasia"
