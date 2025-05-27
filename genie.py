@@ -1,200 +1,120 @@
-from dataclasses import dataclass
+import asyncio
 import logging
-import sqlparse
 
-from databricks.sdk.service.sql import StatementResponse, ColumnInfoTypeName
-from databricks.sdk.service.dashboards import GenieResultMetadata
-from botbuilder.schema import Activity, ActivityTypes, Attachment
-from botbuilder.core import CardFactory
+from databricks.sdk import GenieAPI, WorkspaceClient
+
+from const import DATABRICKS_HOST, DATABRICKS_CLIENT_ID, DATABRICKS_CLIENT_SECRET
+from genie_result import GenieResult
 
 # Log
 logger = logging.getLogger(__name__)
 
 
-def get_cell(text: str = "") -> dict:
-    """
-    Returns a cell object for use in adaptive cards.
-    """
-    return {
-        "type": "TableCell",
-        "items": [
-            {
-                "type": "TextBlock",
-                "text": text,
-                "wrap": True,
-            }
-        ]
-    }
+class GenieQuerier:
+    genie_api: GenieAPI
 
-
-def get_card(response: str, col_output: list[dict[str, int]], row_output: list[dict[str, any]],
-             query: str) -> Attachment:
-    """
-    Returns an adaptive card template for displaying query results.
-    """
-    return CardFactory.adaptive_card(
-        {
-            "type": "AdaptiveCard",
-            "version": "1.5",
-            "body": [
-                {
-                    "type": "TextBlock",
-                    "text": "Results",
-                    "wrap": True,
-                    "size": "Large",
-                    "weight": "Bolder"
-                },
-                {
-                    "type": "Container",
-                    "layouts": [
-                        {
-                            "type": "Layout.Flow",
-                            "horizontalItemsAlignment": "left"
-                        }
-                    ],
-                    "items": [
-                        {
-                            "type": "Icon",
-                            "name": "TableLightning",
-                            "size": "Small"
-                        },
-                        {
-                            "type": "TextBlock",
-                            "text": response,
-                            "wrap": True
-                        },
-                    ]
-                },
-                {
-                    "type": "Table",
-                    "roundedCorners": True,
-                    "firstRowAsHeaders": True,
-                    "columns": col_output,
-                    "rows": row_output,
-                },
-            ],
-            "actions": [
-                {
-                    "type": "Action.ShowCard",
-                    "title": "Show/hide SQL query",
-                    "card": {
-                        "type": "AdaptiveCard",
-                        "body": [
-                            {
-                                "type": "CodeBlock",
-                                "codeSnippet": sqlparse.format(query, reindent=True, keyword_case='upper'),
-                                "language": "Sql",
-                            }
-                        ]
-                    }
-                }
-            ],
-        }
-    )
-
-
-@dataclass
-class GenieResult:
-    query_description: str | None = None
-    query: str | None = None
-    query_result_metadata: GenieResultMetadata | None = None
-    statement_id: str | None = None
-    statement_response: StatementResponse | None = None
-    message: str | None = None
-    conversation_id: str | None = None
-
-    def process_query_results(self) -> Activity:
-        """
-        Processes the result from a Genie query and formats it into an Activity object.
-
-        This function takes a GenieResult object, extracts relevant information such as
-        query description, metadata, and query results, and formats it into a message
-        activity. If the query result contains tabular data, it generates an adaptive
-        card with a table representation of the data.
-
-        :returns: An Activity object containing the formatted response or an error message.
-        :rtype: Activity
-
-        :raises: Logs errors if required fields (e.g., result or data_array) are missing
-                in the GenieResult object.
-        """
-        response = ""
-
-        if self.query_description:
-            response += f"{self.query_description}\n\n"
-
-        if self.query_result_metadata:
-            metadata = self.query_result_metadata
-            if metadata.row_count:
-                response += f"**Row Count:** {metadata.row_count}\n\n"
-
-        if self.statement_response:
-            statement_response = self.statement_response
-            logger.info(f"Found statement_response: {statement_response}")
-
-            if statement_response.result and statement_response.result.data_array:
-
-                manifest = statement_response.manifest
-                columns = []
-
-                if manifest and manifest.schema and manifest.schema.columns:
-                    columns = manifest.schema.columns
-                    logger.info(f"Schema columns: {columns}")
-                else:
-                    logger.warning("No manifest found in statement_response.")
-
-                col_output = [{"width": 3} for _ in columns]
-
-                data_array = statement_response.result.data_array
-                logger.info(f"Data array: {data_array}")
-
-                row_output = [
-                    {
-                        "type": "TableRow",
-                        "cells": [get_cell(col.name) for col in columns]
-                    }
-                ]
-
-                for row in data_array:
-                    cell_output = []
-                    for value, col in zip(row, columns):
-                        if value is None:
-                            formatted_value = "NULL"
-                        elif col.type_name in [ColumnInfoTypeName.DECIMAL, ColumnInfoTypeName.DOUBLE,
-                                               ColumnInfoTypeName.FLOAT]:
-                            formatted_value = f"{float(value):,.2f}"
-                        elif col.type_name in [ColumnInfoTypeName.INT, ColumnInfoTypeName.LONG,
-                                               ColumnInfoTypeName.SHORT]:
-                            formatted_value = f"{int(value):,}"
-                        else:
-                            formatted_value = str(value)
-                        cell_output.append(get_cell(formatted_value))
-                    row_output.append({
-                        "type": "TableRow",
-                        "cells": cell_output
-                    })
-                return Activity(
-                    type=ActivityTypes.message,
-                    attachments=[
-                        get_card(response, col_output, row_output,
-                                 self.query or "No query provided")
-                    ]
-                )
-            else:
-                logger.error(
-                    f"Missing result or data_array in statement_response: {statement_response}")
-        elif self.message:
-            response += f"{self.message}\n\n"
-            return Activity(
-                text=response,
-                type=ActivityTypes.message,
-            )
-        else:
-            response += "No data available.\n\n"
-            logger.error(
-                "No statement_response or message found in answer_json")
-
-        return Activity(
-            text=response,
-            type=ActivityTypes.message
+    def __init__(self):
+        workspace_client = WorkspaceClient(
+            host=DATABRICKS_HOST,
+            client_id=DATABRICKS_CLIENT_ID,
+            client_secret=DATABRICKS_CLIENT_SECRET,
         )
+        self.genie_api = GenieAPI(workspace_client.api_client)
+
+    async def ask_genie(self, question: str, space_id: str, conversation_id: str | None) -> GenieResult:
+        """
+        Asynchronously sends a question to the Genie API and waits for a response.
+        This function handles both new conversations and adding messages to existing conversations.
+        It processes message attachments and query results, converting them into a structured response.
+        Args:
+            question (str): The question or message to send to the Genie API.
+            space_id (str): The identifier for the Genie Space.
+            conversation_id (str | None): The ID of an existing conversation to continue,
+                                         or None to start a new conversation.
+        Returns:
+            GenieResult: An object containing the response data, which may include:
+                - message: Text response content
+                - query_description: Description of any executed query
+                - query_result_metadata: Metadata about query results
+                - statement_id: ID of the executed statement
+                - statement_response: Full response from executed statements
+                - conversation_id: ID of the conversation
+        Raises:
+            Exception: Any errors during API communication or response processing are caught,
+                       logged, and returned as an error message in the result.
+        """
+        try:
+            loop = asyncio.get_running_loop()
+            if conversation_id is None:
+                initial_message = await loop.run_in_executor(
+                    None, self.genie_api.start_conversation_and_wait, space_id, question)
+                conversation_id = initial_message.conversation_id
+            else:
+                initial_message = await loop.run_in_executor(
+                    None,
+                    self.genie_api.create_message_and_wait,
+                    space_id,
+                    conversation_id,
+                    question
+                )
+
+            message_content = await loop.run_in_executor(
+                None,
+                self.genie_api.get_message,
+                space_id,
+                initial_message.conversation_id,
+                initial_message.message_id
+            )
+            logger.info(f"Raw message content: {message_content}")
+
+            if not message_content.attachments:
+                return GenieResult(
+                    message=message_content.content,
+                    conversation_id=conversation_id,
+                )
+
+            for attachment in message_content.attachments:
+                attachment_id = attachment.attachment_id
+                query_obj = attachment.query
+
+                if not attachment_id or not query_obj:
+                    text_obj = attachment.text
+                    message = text_obj.content if text_obj else ""
+                    return GenieResult(message=message, conversation_id=conversation_id)
+
+                # Use the new endpoint to get query results
+                query_result = await loop.run_in_executor(
+                    None,
+                    self.genie_api.get_message_query_result_by_attachment,
+                    space_id,
+                    initial_message.conversation_id,
+                    initial_message.message_id,
+                    attachment_id
+                )
+
+                logger.info(f"Raw query result: {query_result}")
+
+                response_data = GenieResult(
+                    query_description=query_obj.description,
+                    query_result_metadata=query_obj.query_result_metadata,
+                    query=query_obj.query,
+                    statement_id=query_obj.statement_id,
+                    conversation_id=conversation_id,
+                    statement_response=query_result.statement_response
+                )
+
+                if not response_data.statement_response:
+                    logger.error(
+                        f"Missing statement_response in query_result: {query_result}")
+
+                return response_data
+
+            return GenieResult(message="No attachment found", conversation_id=conversation_id)
+
+        except Exception as e:
+            logger.error(
+                f"Error in ask_genie: {str(e)} | space_id: {space_id}, conversation_id: {conversation_id}")
+            return GenieResult(
+                message="An error occurred while processing your request.",
+                conversation_id=conversation_id
+            )

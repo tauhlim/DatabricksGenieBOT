@@ -1,66 +1,28 @@
 """
 Databricks Genie Bot
 
-Author: Luiz Carrossoni Neto
-Revision: 1.0
+Author : Vuong Nguyen
+Original Author: Luiz Carrossoni Neto
+Revision: 2.0
 
 This script implements an experimental chatbot that interacts with Databricks' Genie API.
 The bot facilitates conversations with Genie,
 Databricks' AI assistant, through a chat interface.
 
 Note: This is experimental code and is not intended for production use.
-
-
-Update on May 02 to reflect Databricks API Changes
-https://www.databricks.com/blog/genie-conversation-apis-public-preview
 """
-
-import asyncio
-import json
 import logging
 import os
 
 from aiohttp import web
-from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, ActivityHandler, TurnContext
-from botbuilder.schema import Activity, ChannelAccount
-from databricks.sdk import WorkspaceClient, GenieAPI
-from dotenv import load_dotenv
+from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter
+from botbuilder.schema import Activity
 
-from genie import GenieResult
+from bot import MyBot
+from const import SPACE_NOT_FOUND, SPACES, APP_ID, APP_PASSWORD
 
 # Log
 logger = logging.getLogger(__name__)
-
-# Env vars
-load_dotenv()
-
-DATABRICKS_HOST = os.getenv("DATABRICKS_HOST")
-DATABRICKS_CLIENT_ID = os.getenv("DATABRICKS_CLIENT_ID")
-DATABRICKS_CLIENT_SECRET = os.getenv("DATABRICKS_CLIENT_SECRET")
-APP_ID = os.getenv("APP_ID", "")
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
-
-# Constants
-WELCOME_MESSAGE = "Welcome to the Data Query Bot!"
-WAITING_MESSAGE = "Please wait while I process your request..."
-SWITCHING_MESSAGE = "switch to @"
-
-# Spaces mapping in json file
-with open('spaces.json') as f:
-    SPACES = json.load(f)
-
-REVERSE_SPACES = {v: k for k, v in SPACES.items()}
-
-LIST_SPACES = ", ".join([f"@{space_name}" for space_name in SPACES.keys()])
-SPACE_NOT_FOUND = f"Genie space not found. Please use {LIST_SPACES} to specify the space."
-
-workspace_client = WorkspaceClient(
-    host=DATABRICKS_HOST,
-    client_id=DATABRICKS_CLIENT_ID,
-    client_secret=DATABRICKS_CLIENT_SECRET,
-)
-
-genie_api = GenieAPI(workspace_client.api_client)
 
 
 def get_space_id(question: str) -> str:
@@ -75,162 +37,10 @@ def get_space_id(question: str) -> str:
     return SPACE_NOT_FOUND
 
 
-async def ask_genie(question: str, space_id: str, conversation_id: str | None) -> GenieResult:
-    """
-    Asynchronously sends a question to the Genie API and waits for a response.
-    This function handles both new conversations and adding messages to existing conversations.
-    It processes message attachments and query results, converting them into a structured response.
-    Args:
-        question (str): The question or message to send to the Genie API.
-        space_id (str): The identifier for the Genie Space.
-        conversation_id (str | None): The ID of an existing conversation to continue,
-                                     or None to start a new conversation.
-    Returns:
-        GenieResult: An object containing the response data, which may include:
-            - message: Text response content
-            - query_description: Description of any executed query
-            - query_result_metadata: Metadata about query results
-            - statement_id: ID of the executed statement
-            - statement_response: Full response from executed statements
-            - conversation_id: ID of the conversation
-    Raises:
-        Exception: Any errors during API communication or response processing are caught,
-                   logged, and returned as an error message in the result.
-    """
-    try:
-        loop = asyncio.get_running_loop()
-        if conversation_id is None:
-            initial_message = await loop.run_in_executor(
-                None, genie_api.start_conversation_and_wait, space_id, question)
-            conversation_id = initial_message.conversation_id
-        else:
-            initial_message = await loop.run_in_executor(
-                None,
-                genie_api.create_message_and_wait,
-                space_id,
-                conversation_id,
-                question
-            )
-
-        message_content = await loop.run_in_executor(
-            None,
-            genie_api.get_message,
-            space_id,
-            initial_message.conversation_id,
-            initial_message.message_id
-        )
-        logger.info(f"Raw message content: {message_content}")
-
-        if not message_content.attachments:
-            return GenieResult(
-                message=message_content.content,
-                conversation_id=conversation_id,
-            )
-
-        for attachment in message_content.attachments:
-            attachment_id = attachment.attachment_id
-            query_obj = attachment.query
-
-            if not attachment_id or not query_obj:
-                text_obj = attachment.text
-                message = text_obj.content if text_obj else ""
-                return GenieResult(message=message, conversation_id=conversation_id)
-
-            # Use the new endpoint to get query results
-            query_result = await loop.run_in_executor(
-                None,
-                genie_api.get_message_query_result_by_attachment,
-                space_id,
-                initial_message.conversation_id,
-                initial_message.message_id,
-                attachment_id
-            )
-
-            logger.info(f"Raw query result: {query_result}")
-
-            response_data = GenieResult(
-                query_description=query_obj.description,
-                query_result_metadata=query_obj.query_result_metadata,
-                query=query_obj.query,
-                statement_id=query_obj.statement_id,
-                conversation_id=conversation_id,
-                statement_response=query_result.statement_response
-            )
-
-            if not response_data.statement_response:
-                logger.error(
-                    f"Missing statement_response in query_result: {query_result}")
-
-        return response_data
-
-    except Exception as e:
-        logger.error(
-            f"Error in ask_genie: {str(e)} | space_id: {space_id}, conversation_id: {conversation_id}")
-        return GenieResult(message="An error occurred while processing your request.", conversation_id=conversation_id)
-
+BOT = MyBot()
 
 SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
-
-
-class MyBot(ActivityHandler):
-    def __init__(self):
-        self.conversation_ids: dict[str, str] = {}
-        self.space_ids: dict[str, str] = {}
-
-    async def on_message_activity(self, turn_context: TurnContext):
-        """
-        Handles incoming messages from the user.
-        It processes the message, determines the appropriate Genie space,
-        and sends the query to Genie for processing.
-        :param turn_context: The context of the turn, containing the activity.
-        :return: None
-        """
-        logger.info(f"Received message: {turn_context.activity.text}")
-        question = turn_context.activity.text
-        user_id = turn_context.activity.from_property.id
-        conversation_id = self.conversation_ids.get(user_id)
-        space_id = self.space_ids.get(user_id)
-        if not space_id or "@" in question.lower():
-            new_space_id = get_space_id(question)
-            if new_space_id == SPACE_NOT_FOUND:
-                await turn_context.send_activity(SPACE_NOT_FOUND)
-                return
-            # users want to switch spaces
-            if new_space_id != space_id:
-                space_id = new_space_id
-                conversation_id = None
-                self.space_ids[user_id] = new_space_id
-                self.conversation_ids.pop(user_id, None)
-        if SWITCHING_MESSAGE in question.lower():
-            space_id = get_space_id(question)
-            if space_id == SPACE_NOT_FOUND:
-                await turn_context.send_activity(SPACE_NOT_FOUND)
-                return
-            self.space_ids[user_id] = space_id
-            # Reset conversation ID for the new space
-            self.conversation_ids.pop(user_id, None)
-            await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
-            return
-        try:
-            await turn_context.send_activity(WAITING_MESSAGE)
-            genie_result = await ask_genie(question, space_id, conversation_id)
-            self.conversation_ids[user_id] = genie_result.conversation_id
-
-            await turn_context.send_activity(genie_result.process_query_results())
-        except json.JSONDecodeError:
-            await turn_context.send_activity("Failed to decode response from the server.")
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-            await turn_context.send_activity("An error occurred while processing your request.")
-
-    async def on_members_added_activity(self, members_added: list[ChannelAccount], turn_context: TurnContext):
-        for member in members_added:
-            if member.id != turn_context.activity.recipient.id:
-                await turn_context.send_activity(WELCOME_MESSAGE)
-
-
-BOT = MyBot()
 
 
 async def messages(req: web.Request) -> web.Response:
