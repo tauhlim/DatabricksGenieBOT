@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class AdaptiveCardFactory:
-
     @staticmethod
     def get_activity(attachments: list[Attachment] | None) -> Activity:
         return Activity(type=ActivityTypes.message, attachments=attachments)

@@ -51,7 +51,6 @@ class GenieResult:
             logger.info(f"Found statement_response: {statement_response}")
 
             if statement_response.result and statement_response.result.data_array:
-
                 manifest = statement_response.manifest
                 columns = []
 
