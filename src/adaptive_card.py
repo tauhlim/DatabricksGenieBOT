@@ -14,34 +14,32 @@ class AdaptiveCardFactory:
 
     @staticmethod
     def get_activity(attachments: list[Attachment] | None) -> Activity:
-        return Activity(
-            type=ActivityTypes.message,
-            attachments=attachments)
+        return Activity(type=ActivityTypes.message, attachments=attachments)
 
     @staticmethod
     def get_waiting_message() -> Activity:
-        attachment = CardFactory.adaptive_card({
-            "type": "AdaptiveCard",
-            "version": "1.5",
-            "body": [
-                {
-                    "type": "TextBlock",
-                    "text": "Processing your request",
-                    "wrap": True,
-                    "size": "Large",
-                    "weight": "Bolder"
-                },
-                {
-                    "type": "ProgressBar"
-                },
-                {
-                    "type": "TextBlock",
-                    "text": WAITING_MESSAGE,
-                    "spacing": "ExtraSmall",
-                    "size": "Small"
-                }
-            ]
-        })
+        attachment = CardFactory.adaptive_card(
+            {
+                "type": "AdaptiveCard",
+                "version": "1.5",
+                "body": [
+                    {
+                        "type": "TextBlock",
+                        "text": "Processing your request",
+                        "wrap": True,
+                        "size": "Large",
+                        "weight": "Bolder",
+                    },
+                    {"type": "ProgressBar"},
+                    {
+                        "type": "TextBlock",
+                        "text": WAITING_MESSAGE,
+                        "spacing": "ExtraSmall",
+                        "size": "Small",
+                    },
+                ],
+            }
+        )
         return AdaptiveCardFactory.get_activity([attachment])
 
     @staticmethod
@@ -57,12 +55,16 @@ class AdaptiveCardFactory:
                     "text": text,
                     "wrap": True,
                 }
-            ]
+            ],
         }
 
     @staticmethod
-    def get_table_card(response: str, col_output: list[dict[str, int]], row_output: list[dict[str, any]],
-                       query: str) -> Activity:
+    def get_table_card(
+        response: str,
+        col_output: list[dict[str, int]],
+        row_output: list[dict[str, any]],
+        query: str,
+    ) -> Activity:
         """
         Returns an adaptive card template for displaying query results.
         """
@@ -76,28 +78,17 @@ class AdaptiveCardFactory:
                         "text": "Results",
                         "wrap": True,
                         "size": "Large",
-                        "weight": "Bolder"
+                        "weight": "Bolder",
                     },
                     {
                         "type": "Container",
                         "layouts": [
-                            {
-                                "type": "Layout.Flow",
-                                "horizontalItemsAlignment": "left"
-                            }
+                            {"type": "Layout.Flow", "horizontalItemsAlignment": "left"}
                         ],
                         "items": [
-                            {
-                                "type": "Icon",
-                                "name": "TableLightning",
-                                "size": "Small"
-                            },
-                            {
-                                "type": "TextBlock",
-                                "text": response,
-                                "wrap": True
-                            },
-                        ]
+                            {"type": "Icon", "name": "TableLightning", "size": "Small"},
+                            {"type": "TextBlock", "text": response, "wrap": True},
+                        ],
                     },
                     {
                         "type": "Table",
@@ -116,11 +107,13 @@ class AdaptiveCardFactory:
                             "body": [
                                 {
                                     "type": "CodeBlock",
-                                    "codeSnippet": sqlparse.format(query, reindent=True, keyword_case='upper'),
+                                    "codeSnippet": sqlparse.format(
+                                        query, reindent=True, keyword_case="upper"
+                                    ),
                                     "language": "Sql",
                                 }
-                            ]
-                        }
+                            ],
+                        },
                     }
                 ],
             }

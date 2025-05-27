@@ -5,7 +5,13 @@ from botbuilder.core import ActivityHandler, TurnContext
 from botbuilder.schema import ChannelAccount
 
 from adaptive_card import AdaptiveCardFactory
-from const import SPACE_NOT_FOUND, SWITCHING_MESSAGE, REVERSE_SPACES, WELCOME_MESSAGE, SPACES
+from const import (
+    SPACE_NOT_FOUND,
+    SWITCHING_MESSAGE,
+    REVERSE_SPACES,
+    WELCOME_MESSAGE,
+    SPACES,
+)
 from genie import GenieQuerier
 
 # Log
@@ -54,22 +60,36 @@ class MyBot(ActivityHandler):
             self.space_ids[user_id] = space_id
             # Reset conversation ID for the new space
             self.conversation_ids.pop(user_id, None)
-            await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
+            await turn_context.send_activity(
+                f"Switched to space: {REVERSE_SPACES[space_id]}"
+            )
             return
         try:
-            wait_activity = await turn_context.send_activity(AdaptiveCardFactory.get_waiting_message())
-            genie_result = await self.genie_querier.ask_genie(question, space_id, conversation_id)
+            wait_activity = await turn_context.send_activity(
+                AdaptiveCardFactory.get_waiting_message()
+            )
+            genie_result = await self.genie_querier.ask_genie(
+                question, space_id, conversation_id
+            )
             self.conversation_ids[user_id] = genie_result.conversation_id
             response_activity = genie_result.process_query_results()
-            response_activity.id = wait_activity.id  # Use the same ID to update the waiting message
+            response_activity.id = (
+                wait_activity.id
+            )  # Use the same ID to update the waiting message
             await turn_context.update_activity(response_activity)
         except json.JSONDecodeError:
-            await turn_context.send_activity("Failed to decode response from the server.")
+            await turn_context.send_activity(
+                "Failed to decode response from the server."
+            )
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
-            await turn_context.send_activity("An error occurred while processing your request.")
+            await turn_context.send_activity(
+                "An error occurred while processing your request."
+            )
 
-    async def on_members_added_activity(self, members_added: list[ChannelAccount], turn_context: TurnContext):
+    async def on_members_added_activity(
+        self, members_added: list[ChannelAccount], turn_context: TurnContext
+    ):
         for member in members_added:
             if member.id != turn_context.activity.recipient.id:
                 await turn_context.send_activity(WELCOME_MESSAGE)

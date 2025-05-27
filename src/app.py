@@ -11,6 +11,7 @@ Databricks' AI assistant, through a chat interface.
 
 Note: This is experimental code and is not intended for production use.
 """
+
 import logging
 import os
 
@@ -57,5 +58,5 @@ if __name__ == "__main__":
         host = os.getenv("HOST", "localhost")
         port = int(os.environ.get("PORT", 3978))
         web.run_app(app, host=host, port=port)
-    except Exception as error:
-        logger.exception("Error running app")
+    except Exception as e:
+        logger.exception(f"Error running app:  {str(e)}")

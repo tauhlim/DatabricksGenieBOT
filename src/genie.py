@@ -21,7 +21,9 @@ class GenieQuerier:
         )
         self.genie_api = GenieAPI(workspace_client.api_client)
 
-    async def ask_genie(self, question: str, space_id: str, conversation_id: str | None) -> GenieResult:
+    async def ask_genie(
+        self, question: str, space_id: str, conversation_id: str | None
+    ) -> GenieResult:
         """
         Asynchronously sends a question to the Genie API and waits for a response.
         This function handles both new conversations and adding messages to existing conversations.
@@ -47,7 +49,8 @@ class GenieQuerier:
             loop = asyncio.get_running_loop()
             if conversation_id is None:
                 initial_message = await loop.run_in_executor(
-                    None, self.genie_api.start_conversation_and_wait, space_id, question)
+                    None, self.genie_api.start_conversation_and_wait, space_id, question
+                )
                 conversation_id = initial_message.conversation_id
             else:
                 initial_message = await loop.run_in_executor(
@@ -55,7 +58,7 @@ class GenieQuerier:
                     self.genie_api.create_message_and_wait,
                     space_id,
                     conversation_id,
-                    question
+                    question,
                 )
 
             message_content = await loop.run_in_executor(
@@ -63,7 +66,7 @@ class GenieQuerier:
                 self.genie_api.get_message,
                 space_id,
                 initial_message.conversation_id,
-                initial_message.message_id
+                initial_message.message_id,
             )
             logger.info(f"Raw message content: {message_content}")
 
@@ -89,7 +92,7 @@ class GenieQuerier:
                     space_id,
                     initial_message.conversation_id,
                     initial_message.message_id,
-                    attachment_id
+                    attachment_id,
                 )
 
                 logger.info(f"Raw query result: {query_result}")
@@ -100,21 +103,25 @@ class GenieQuerier:
                     query=query_obj.query,
                     statement_id=query_obj.statement_id,
                     conversation_id=conversation_id,
-                    statement_response=query_result.statement_response
+                    statement_response=query_result.statement_response,
                 )
 
                 if not response_data.statement_response:
                     logger.error(
-                        f"Missing statement_response in query_result: {query_result}")
+                        f"Missing statement_response in query_result: {query_result}"
+                    )
 
                 return response_data
 
-            return GenieResult(message="No attachment found", conversation_id=conversation_id)
+            return GenieResult(
+                message="No attachment found", conversation_id=conversation_id
+            )
 
         except Exception as e:
             logger.error(
-                f"Error in ask_genie: {str(e)} | space_id: {space_id}, conversation_id: {conversation_id}")
+                f"Error in ask_genie: {str(e)} | space_id: {space_id}, conversation_id: {conversation_id}"
+            )
             return GenieResult(
                 message="An error occurred while processing your request.",
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
             )

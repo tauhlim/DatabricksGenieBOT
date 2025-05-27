@@ -55,7 +55,7 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
 1. Create App Service Plan
 2. Create Web App on the App Service Plan
 3. Add Configuration to the web app 
-  a. `gunicorn --bind 0.0.0.0 --worker-class aiohttp.worker.GunicornWebWorker --timeout 1200 app:app`
+  a. `gunicorn --bind 0.0.0.0 --worker-class aiohttp.worker.GunicornWebWorker --timeout 1200 --chdir src app:app`
   b. Set the necessary environment variables for authentication
   c. Set environment variable `SCM_DO_BUILD_DURING_DEPLOYMENT` to `true` to ensure 
 the dependencies are installed during deployment.

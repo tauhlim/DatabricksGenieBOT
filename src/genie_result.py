@@ -69,7 +69,9 @@ class GenieResult:
                 row_output = [
                     {
                         "type": "TableRow",
-                        "cells": [AdaptiveCardFactory.get_cell(col.name) for col in columns]
+                        "cells": [
+                            AdaptiveCardFactory.get_cell(col.name) for col in columns
+                        ],
                     }
                 ]
 
@@ -78,24 +80,31 @@ class GenieResult:
                     for value, col in zip(row, columns):
                         if value is None:
                             formatted_value = "NULL"
-                        elif col.type_name in [ColumnInfoTypeName.DECIMAL, ColumnInfoTypeName.DOUBLE,
-                                               ColumnInfoTypeName.FLOAT]:
+                        elif col.type_name in [
+                            ColumnInfoTypeName.DECIMAL,
+                            ColumnInfoTypeName.DOUBLE,
+                            ColumnInfoTypeName.FLOAT,
+                        ]:
                             formatted_value = f"{float(value):,.2f}"
-                        elif col.type_name in [ColumnInfoTypeName.INT, ColumnInfoTypeName.LONG,
-                                               ColumnInfoTypeName.SHORT]:
+                        elif col.type_name in [
+                            ColumnInfoTypeName.INT,
+                            ColumnInfoTypeName.LONG,
+                            ColumnInfoTypeName.SHORT,
+                        ]:
                             formatted_value = f"{int(value):,}"
                         else:
                             formatted_value = str(value)
-                        cell_output.append(AdaptiveCardFactory.get_cell(formatted_value))
-                    row_output.append({
-                        "type": "TableRow",
-                        "cells": cell_output
-                    })
-                return AdaptiveCardFactory.get_table_card(response, col_output, row_output,
-                                                          self.query or "No query provided")
+                        cell_output.append(
+                            AdaptiveCardFactory.get_cell(formatted_value)
+                        )
+                    row_output.append({"type": "TableRow", "cells": cell_output})
+                return AdaptiveCardFactory.get_table_card(
+                    response, col_output, row_output, self.query or "No query provided"
+                )
             else:
                 logger.error(
-                    f"Missing result or data_array in statement_response: {statement_response}")
+                    f"Missing result or data_array in statement_response: {statement_response}"
+                )
         elif self.message:
             response += f"{self.message}\n\n"
             return Activity(
@@ -104,10 +113,6 @@ class GenieResult:
             )
         else:
             response += "No data available.\n\n"
-            logger.error(
-                "No statement_response or message found in answer_json")
+            logger.error("No statement_response or message found in answer_json")
 
-        return Activity(
-            text=response,
-            type=ActivityTypes.message
-        )
+        return Activity(text=response, type=ActivityTypes.message)
