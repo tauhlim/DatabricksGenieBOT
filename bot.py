@@ -1,12 +1,15 @@
 import json
+import logging
 
 from botbuilder.core import ActivityHandler, TurnContext
 from botbuilder.schema import ChannelAccount
 
 from adaptive_card import AdaptiveCardFactory
-from app import logger, get_space_id
-from const import SPACE_NOT_FOUND, SWITCHING_MESSAGE, REVERSE_SPACES, WELCOME_MESSAGE
+from const import SPACE_NOT_FOUND, SWITCHING_MESSAGE, REVERSE_SPACES, WELCOME_MESSAGE, SPACES
 from genie import GenieQuerier
+
+# Log
+logger = logging.getLogger(__name__)
 
 
 class MyBot(ActivityHandler):
@@ -70,3 +73,15 @@ class MyBot(ActivityHandler):
         for member in members_added:
             if member.id != turn_context.activity.recipient.id:
                 await turn_context.send_activity(WELCOME_MESSAGE)
+
+
+def get_space_id(question: str) -> str:
+    """
+    Determines the Genie space ID based on the question.
+    :param question: The question to analyze for space ID.
+    :return: The space ID if found, otherwise a message indicating space not found.
+    """
+    for space_name, space_id in SPACES.items():
+        if "@" + space_name.lower() in question.lower():
+            return space_id
+    return SPACE_NOT_FOUND

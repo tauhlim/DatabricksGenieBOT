@@ -1,8 +1,13 @@
+import logging
+
 import sqlparse
 from botbuilder.core import CardFactory
 from botbuilder.schema import Attachment, ActivityTypes, Activity
 
 from const import WAITING_MESSAGE
+
+# Log
+logger = logging.getLogger(__name__)
 
 
 class AdaptiveCardFactory:

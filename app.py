@@ -19,23 +19,10 @@ from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter
 from botbuilder.schema import Activity
 
 from bot import MyBot
-from const import SPACE_NOT_FOUND, SPACES, APP_ID, APP_PASSWORD
+from const import APP_ID, APP_PASSWORD
 
 # Log
 logger = logging.getLogger(__name__)
-
-
-def get_space_id(question: str) -> str:
-    """
-    Determines the Genie space ID based on the question.
-    :param question: The question to analyze for space ID.
-    :return: The space ID if found, otherwise a message indicating space not found.
-    """
-    for space_name, space_id in SPACES.items():
-        if "@" + space_name.lower() in question.lower():
-            return space_id
-    return SPACE_NOT_FOUND
-
 
 BOT = MyBot()
 
