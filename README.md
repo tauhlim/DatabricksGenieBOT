@@ -2,11 +2,14 @@
 
 ## Objective
 
-This project implements an experimental chatbot that interacts with Databricks' Genie API, which is currently in Private Preview and not officially supported (will be updated if it changes). The bot is designed to facilitate conversations with Genie, Databricks' AI assistant, through a chat interface like MS Teams.
+This project implements an experimental chatbot that interacts with Databricks' Genie API. The bot is designed to 
+facilitate conversations with Genie, Databricks' AI assistant, through a chat interface like MS Teams.
 
 ## Overview
 
-This experimental code creates a Genie BOT in Databricks using the Genie API. It's important to note that this is not production-ready code and is not associated with or endorsed by any employer. The code is intended to be used as-is for experimental and learning purposes only.
+This experimental code creates a Genie BOT in Databricks using the Genie API. It's important to note that this is not 
+production-ready code and is not associated with or endorsed by any employer. 
+The code is intended to be used as-is for experimental and learning purposes only.
 
 ## Key Features
 
