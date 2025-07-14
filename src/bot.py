@@ -158,6 +158,8 @@ class MyBot(ActivityHandler):
             token_response = await turn_context.adapter.get_user_token(
                 turn_context, OAUTH_CONNECTION_NAME
             )
+            # Update the genie querier with the new token
+            self.genie_querier = GenieQuerier(token = token_response.token)
             return token_response is not None and token_response.token is not None
         except Exception as e:
             logger.error(f"Error checking authentication: {str(e)}")
