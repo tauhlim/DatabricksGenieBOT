@@ -16,16 +16,27 @@ import logging
 import os
 
 from aiohttp import web
-from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter
+from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, ConversationState, UserState, MemoryStorage
 from botbuilder.schema import Activity
 
 from bot import MyBot
-from const import APP_ID, APP_PASSWORD
+from const import APP_ID, APP_PASSWORD, OAUTH_CONNECTION_NAME
+
+from login_dialog import LoginDialog
 
 # Log
 logger = logging.getLogger(__name__)
 
-BOT = MyBot()
+# Create MemoryStorage and state
+MEMORY = MemoryStorage()
+USER_STATE = UserState(MEMORY)
+CONVERSATION_STATE = ConversationState(MEMORY)
+
+# Create dialog
+DIALOG = LoginDialog(OAUTH_CONNECTION_NAME)
+
+# Create Bot
+BOT = MyBot(CONVERSATION_STATE, USER_STATE, DIALOG)
 
 SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
