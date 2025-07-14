@@ -3,7 +3,7 @@ import logging
 
 from botbuilder.core import ActivityHandler, TurnContext, ConversationState, UserState
 from botbuilder.dialogs import Dialog
-from botbuilder.schema import ChannelAccount
+from botbuilder.schema import ChannelAccount, TokenResponse
 
 from adaptive_card import AdaptiveCardFactory
 from const import (
@@ -32,7 +32,7 @@ class MyBot(ActivityHandler):
         dialog: Dialog,):
         self.conversation_ids: dict[str, str] = {}
         self.space_ids: dict[str, str] = {}
-        self.genie_querier = GenieQuerier()
+        self.genie_querier = None
         self.conversation_state = conversation_state
         self.user_state = user_state
         self.dialog = dialog
@@ -55,6 +55,12 @@ class MyBot(ActivityHandler):
         # Check if user is authenticated
         if not await self._is_user_authenticated(turn_context):
             logger.info("User not authenticated, triggering login dialog")
+            await self._trigger_login_dialog(turn_context)
+            return
+        
+        # Check if genie querier is initialized (user must be authenticated)
+        if self.genie_querier is None:
+            logger.warning("Genie querier not initialized, user needs to authenticate")
             await self._trigger_login_dialog(turn_context)
             return
         
@@ -124,6 +130,20 @@ class MyBot(ActivityHandler):
 
     # Handle token response for web chat
     async def on_token_response_event(self, turn_context: TurnContext):
+        logger.info(f"Token response event received")
+        
+        # Extract the token from the activity value
+        token_response = TokenResponse().deserialize(turn_context.activity.value)
+        
+        if token_response and token_response.token:
+            logger.info("Token received successfully, initializing GenieQuerier")
+            # Initialize the genie querier with the token
+            self.genie_querier = GenieQuerier(token=token_response.token)
+        else:
+            logger.error("No token found in token response event")
+            await turn_context.send_activity("Authentication failed. Please try again.")
+            return
+
         # Run the Dialog with the new Token Response Event Activity.
         await DialogHelper.run_dialog(
             self.dialog,
@@ -140,6 +160,9 @@ class MyBot(ActivityHandler):
             turn_context,
             self.conversation_state.create_property("DialogState"),
         )
+        
+        # After successful authentication, try to get the token and initialize genie querier
+        await self._initialize_genie_querier_with_token(turn_context)
     
     # on_invoke_activity does not handle signin/verifyState, so we need to handle it here
     async def on_invoke_activity(self, turn_context: TurnContext):
@@ -147,6 +170,25 @@ class MyBot(ActivityHandler):
             return await self.on_teams_signin_verify_state(turn_context)
         else:
             return await super().on_invoke_activity(turn_context)
+
+    async def _initialize_genie_querier_with_token(self, turn_context: TurnContext):
+        """
+        Initialize the genie querier with the user's token.
+        :param turn_context: The context of the turn.
+        """
+        try:
+            # Try to get the token from the adapter
+            token_response = await turn_context.adapter.get_user_token(
+                turn_context, OAUTH_CONNECTION_NAME
+            )
+            
+            if token_response and token_response.token:
+                logger.info("Token retrieved successfully, initializing GenieQuerier")
+                self.genie_querier = GenieQuerier(token=token_response.token)
+            else:
+                logger.warning("No token available for genie querier initialization")
+        except Exception as e:
+            logger.error(f"Error initializing genie querier with token: {str(e)}")
 
     async def _is_user_authenticated(self, turn_context: TurnContext) -> bool:
         """
@@ -158,8 +200,6 @@ class MyBot(ActivityHandler):
             token_response = await turn_context.adapter.get_user_token(
                 turn_context, OAUTH_CONNECTION_NAME
             )
-            # Update the genie querier with the new token
-            self.genie_querier = GenieQuerier(token = token_response.token)
             return token_response is not None and token_response.token is not None
         except Exception as e:
             logger.error(f"Error checking authentication: {str(e)}")
