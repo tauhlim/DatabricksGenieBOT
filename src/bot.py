@@ -45,74 +45,82 @@ class MyBot(ActivityHandler):
         :param turn_context: The context of the turn, containing the activity.
         :return: None
         """
-        logger.info(f"Received message: {turn_context.activity.text}")
+        logger.info(f"on_message_activity: Received message: {turn_context.activity.text}")
         
         if not turn_context.activity.from_property or not isinstance(turn_context.activity.from_property.id, str):
             logger.warning("No valid user identifier found")
             await turn_context.send_activity("Unable to identify user. Please try again.")
             return
-        
-        # Check if user is authenticated
-        if not await self._is_user_authenticated(turn_context):
-            logger.info("User not authenticated, triggering login dialog")
-            await self._trigger_login_dialog(turn_context)
-            return
-        
-        # Check if genie querier is initialized (user must be authenticated)
-        if self.genie_querier is None:
-            logger.warning("Genie querier not initialized, user needs to authenticate")
-            await self._trigger_login_dialog(turn_context)
-            return
-        
+
         question = turn_context.activity.text
         user_id = str(turn_context.activity.from_property.id)
         conversation_id = self.conversation_ids.get(user_id)
         space_id = self.space_ids.get(user_id, "")
-        if not space_id or "@" in question.lower():
+        
+        # Check if user is authenticated
+        if not await self._is_user_authenticated(turn_context):
+            logger.info("User not authenticated, triggering login dialog")
+            return await self._trigger_login_dialog(turn_context)
+
+         # Check if genie has been initialized
+        elif "logout" in question.lower():
+            return await turn_context.adapter.sign_out_user(turn_context, OAUTH_CONNECTION_NAME, None)            
+
+        # Check if genie has been initialized
+        elif self.genie_querier is None:
+            logger.warning("Genie querier not initialized, user needs to authenticate")
+            await self._trigger_login_dialog(turn_context)
+            return await self._initialize_genie_querier_with_token(turn_context)
+        
+        elif not space_id or "@" in question.lower():
             new_space_id = get_space_id(question)
             if new_space_id == SPACE_NOT_FOUND:
-                await turn_context.send_activity(SPACE_NOT_FOUND)
-                return
+                return await turn_context.send_activity(SPACE_NOT_FOUND)
+                
             # users want to switch spaces
             if new_space_id != space_id:
                 space_id = new_space_id
                 conversation_id = None
                 self.space_ids[user_id] = new_space_id
                 self.conversation_ids.pop(user_id, None)
-        if SWITCHING_MESSAGE in question.lower():
+                return await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
+        elif SWITCHING_MESSAGE in question.lower():
             space_id = get_space_id(question)
             if space_id == SPACE_NOT_FOUND:
-                await turn_context.send_activity(SPACE_NOT_FOUND)
-                return
+                return await turn_context.send_activity(SPACE_NOT_FOUND)
+                
             self.space_ids[user_id] = space_id
             # Reset conversation ID for the new space
             self.conversation_ids.pop(user_id, None)
-            await turn_context.send_activity(
+            return await turn_context.send_activity(
                 f"Switched to space: {REVERSE_SPACES[space_id]}"
             )
-            return
-        try:
-            wait_activity = await turn_context.send_activity(
-                AdaptiveCardFactory.get_waiting_message()
-            )
-            genie_result = await self.genie_querier.ask_genie(
-                question, space_id, conversation_id
-            )
-            self.conversation_ids[user_id] = genie_result.conversation_id
-            response_activity = genie_result.process_query_results()
-            response_activity.id = (
-                wait_activity.id
-            )  # Use the same ID to update the waiting message
-            await turn_context.update_activity(response_activity)
-        except json.JSONDecodeError:
-            await turn_context.send_activity(
-                "Failed to decode response from the server."
-            )
-        except Exception as e:
-            logger.error(f"Error processing message: {str(e)}")
-            await turn_context.send_activity(
-                "An error occurred while processing your request."
-            )
+            
+        else:
+            try:
+                wait_activity = await turn_context.send_activity(
+                    AdaptiveCardFactory.get_waiting_message()
+                )
+                genie_result = await self.genie_querier.ask_genie(
+                    question, space_id, conversation_id
+                )
+                self.conversation_ids[user_id] = genie_result.conversation_id
+                response_activity = genie_result.process_query_results()
+                # response_activity.id = (
+                #     wait_activity.id
+                # )  # Use the same ID to update the waiting message
+                # await turn_context.update_activity(response_activity)
+                return await turn_context.send_activity(response_activity)
+                
+            except json.JSONDecodeError:
+                await turn_context.send_activity(
+                    "Failed to decode response from the server."
+                )
+            except Exception as e:
+                logger.error(f"Error processing message: {str(e)}")
+                await turn_context.send_activity(
+                    "An error occurred while processing your request."
+                )
 
     async def on_members_added_activity(
         self, members_added: list[ChannelAccount], turn_context: TurnContext
@@ -130,17 +138,17 @@ class MyBot(ActivityHandler):
 
     # Handle token response for web chat
     async def on_token_response_event(self, turn_context: TurnContext):
-        logger.info(f"Token response event received")
+        logger.info(f"on_token_response_event: Token response event received")
         
         # Extract the token from the activity value
         token_response = TokenResponse().deserialize(turn_context.activity.value)
         
         if token_response and token_response.token:
-            logger.info("Token received successfully, initializing GenieQuerier")
+            logger.info("on_token_response_event: Token received successfully, initializing GenieQuerier")
             # Initialize the genie querier with the token
             self.genie_querier = GenieQuerier(token=token_response.token)
         else:
-            logger.error("No token found in token response event")
+            logger.error("on_token_response_event: No token found in token response event")
             await turn_context.send_activity("Authentication failed. Please try again.")
             return
 
@@ -162,7 +170,7 @@ class MyBot(ActivityHandler):
         )
         
         # After successful authentication, try to get the token and initialize genie querier
-        await self._initialize_genie_querier_with_token(turn_context)
+        return await self._initialize_genie_querier_with_token(turn_context)
     
     # on_invoke_activity does not handle signin/verifyState, so we need to handle it here
     async def on_invoke_activity(self, turn_context: TurnContext):
@@ -183,10 +191,10 @@ class MyBot(ActivityHandler):
             )
             
             if token_response and token_response.token:
-                logger.info("Token retrieved successfully, initializing GenieQuerier")
+                logger.info("_initialize_genie_querier_with_token: Token retrieved successfully, initializing GenieQuerier")
                 self.genie_querier = GenieQuerier(token=token_response.token)
             else:
-                logger.warning("No token available for genie querier initialization")
+                logger.warning("_initialize_genie_querier_with_token: No token available for genie querier initialization")
         except Exception as e:
             logger.error(f"Error initializing genie querier with token: {str(e)}")
 
@@ -200,7 +208,7 @@ class MyBot(ActivityHandler):
             token_response = await turn_context.adapter.get_user_token(
                 turn_context, OAUTH_CONNECTION_NAME
             )
-            return token_response is not None and token_response.token is not None
+            return await token_response is not None and await token_response.token is not None
         except Exception as e:
             logger.error(f"Error checking authentication: {str(e)}")
             return False
@@ -211,13 +219,13 @@ class MyBot(ActivityHandler):
         :param turn_context: The context of the turn.
         """
         try:
-            await DialogHelper.run_dialog(
+            return await DialogHelper.run_dialog(
                 self.dialog,
                 turn_context,
                 self.conversation_state.create_property("DialogState"),
             )
         except Exception as e:
-            logger.error(f"Error triggering login dialog: {str(e)}")
+            logger.error(f"_trigger_login_dialog: Error triggering login dialog: {str(e)}")
             await turn_context.send_activity(
                 "An error occurred while trying to authenticate. Please try again."
             )

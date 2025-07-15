@@ -52,7 +52,8 @@ class LoginDialog(ComponentDialog):
         # token directly from the prompt itself. There is an example of this in the next method.
         if step_context.result:
             await step_context.context.send_activity("You are now logged in.")
-            return await step_context.begin_dialog(OAuthPrompt.__name__)
+            await step_context.context.send_activity("Please proceed to speak with your data.")
+            return await step_context.end_dialog(step_context.result.token)
 
         await step_context.context.send_activity(
             "Login was not successful please try again."
