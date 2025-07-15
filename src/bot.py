@@ -64,6 +64,8 @@ class MyBot(ActivityHandler):
 
          # Check if genie has been initialized
         elif "logout" in question.lower():
+            await turn_context.send_activity("Logging you out...")
+            self.genie_querier = None # reset the genie querier
             return await turn_context.adapter.sign_out_user(turn_context, OAUTH_CONNECTION_NAME, None)            
 
         # Check if genie has been initialized
@@ -208,7 +210,7 @@ class MyBot(ActivityHandler):
             token_response = await turn_context.adapter.get_user_token(
                 turn_context, OAUTH_CONNECTION_NAME
             )
-            return await token_response is not None and await token_response.token is not None
+            return token_response is not None and token_response.token is not None
         except Exception as e:
             logger.error(f"Error checking authentication: {str(e)}")
             return False
