@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class GenieQuerier:
     genie_api: GenieAPI | None
+    auth_method: str | None
 
     def __init__(self, token: str | None = None):
         # If token is provided, use it to authenticate
@@ -20,6 +21,7 @@ class GenieQuerier:
                 host=DATABRICKS_HOST,
                 token=token)
             self.genie_api = GenieAPI(workspace_client.api_client)
+            self.auth_method = "oauth"
         elif DATABRICKS_CLIENT_ID and DATABRICKS_CLIENT_SECRET:
             # Try Service Principal Secrets
             workspace_client = WorkspaceClient(
@@ -28,8 +30,10 @@ class GenieQuerier:
                 client_secret=DATABRICKS_CLIENT_SECRET,
             )
             self.genie_api = GenieAPI(workspace_client.api_client)
+            self.auth_method = "service_principal"
         else:
             self.genie_api = None
+            self.auth_method = None
         
 
     async def ask_genie(

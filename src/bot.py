@@ -29,13 +29,17 @@ class MyBot(ActivityHandler):
     def __init__(self,
         conversation_state: ConversationState,
         user_state: UserState,
-        dialog: Dialog,):
+        dialog: Dialog,
+        auth_method: str = "oauth"):
         self.conversation_ids: dict[str, str] = {}
         self.space_ids: dict[str, str] = {}
-        self.genie_querier = None
+        self.genie_querier = GenieQuerier()
         self.conversation_state = conversation_state
         self.user_state = user_state
         self.dialog = dialog
+        assert auth_method in ['oauth', 'service_principal'], "auth_method should be one of ['oauth','service_principal']"
+        self.auth_method = auth_method
+        
 
     async def on_message_activity(self, turn_context: TurnContext):
         """
@@ -57,6 +61,21 @@ class MyBot(ActivityHandler):
         conversation_id = self.conversation_ids.get(user_id)
         space_id = self.space_ids.get(user_id, "")
         
+        # Check if genie has been initialized
+        if self.genie_querier.auth_method is None:
+            if self.auth_method == 'oauth':
+                logger.warning("Genie querier not initialized properly, user needs to authenticate")
+                await self._trigger_login_dialog(turn_context)
+                return await self._initialize_genie_querier_with_token(turn_context)
+            elif self.auth_method == 'service_principal':
+                logger.warning("auth_method is service_principal, please ensure client_id and client_secret are provided")
+                
+        elif self.genie_querier.auth_method == 'service_principal':
+            if self.auth_method == 'oauth':
+                logger.warning("GenieQuerier initialized with SP credentials, prompting user to login")
+                await self._trigger_login_dialog(turn_context)
+                return await self._initialize_genie_querier_with_token(turn_context)
+        
         # Check if user is authenticated
         if not await self._is_user_authenticated(turn_context):
             logger.info("User not authenticated, triggering login dialog")
@@ -64,16 +83,10 @@ class MyBot(ActivityHandler):
 
          # Check if genie has been initialized
         elif "logout" in question.lower():
-            await turn_context.send_activity("Logging you out...")
-            self.genie_querier = None # reset the genie querier
+            await turn_context.send_activity("Logging you out.")
+            self.genie_querier = GenieQuerier() # reset the genie querier
             return await turn_context.adapter.sign_out_user(turn_context, OAUTH_CONNECTION_NAME, None)            
 
-        # Check if genie has been initialized
-        elif self.genie_querier is None:
-            logger.warning("Genie querier not initialized, user needs to authenticate")
-            await self._trigger_login_dialog(turn_context)
-            return await self._initialize_genie_querier_with_token(turn_context)
-        
         elif not space_id or "@" in question.lower():
             new_space_id = get_space_id(question)
             if new_space_id == SPACE_NOT_FOUND:
