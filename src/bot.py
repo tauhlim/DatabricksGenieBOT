@@ -108,21 +108,26 @@ class MyBot(ActivityHandler):
                 )
                 self.conversation_ids[user_id] = genie_result.conversation_id
                 response_activity = genie_result.process_query_results()
-                # response_activity.id = (
-                #     wait_activity.id
-                # )  # Use the same ID to update the waiting message
-                # await turn_context.update_activity(response_activity)
-                return await turn_context.send_activity(response_activity)
-                
+                response_activity.id = (
+                    wait_activity.id
+                )  # Use the same ID to update the waiting message
+                return await turn_context.update_activity(response_activity)
+                # return await turn_context.send_activity(response_activity)
+            
             except json.JSONDecodeError:
                 await turn_context.send_activity(
                     "Failed to decode response from the server."
                 )
             except Exception as e:
-                logger.error(f"Error processing message: {str(e)}")
-                await turn_context.send_activity(
-                    "An error occurred while processing your request."
-                )
+                
+                if "This channel does not support this operation" in str(e):
+                    return await turn_context.send_activity(response_activity)
+                
+                else:
+                    logger.error(f"Error processing message: {str(e)}")
+                    return await turn_context.send_activity(
+                        "An error occurred while processing your request."
+                    )
 
     async def on_members_added_activity(
         self, members_added: list[ChannelAccount], turn_context: TurnContext
