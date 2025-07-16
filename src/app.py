@@ -12,24 +12,35 @@ Databricks' AI assistant, through a chat interface.
 Note: This is experimental code and is not intended for production use.
 """
 
+from datetime import datetime
 import logging
 import os
 
 from aiohttp import web
-from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter
-from botbuilder.schema import Activity
+from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, ConversationState, TurnContext, UserState, MemoryStorage
+from botbuilder.schema import Activity, ActivityTypes
 
 from bot import MyBot
-from const import APP_ID, APP_PASSWORD
+from const import APP_ID, APP_PASSWORD, OAUTH_CONNECTION_NAME
+
+from login_dialog import LoginDialog
 
 # Log
 logger = logging.getLogger(__name__)
 
-BOT = MyBot()
+# Create MemoryStorage and state
+MEMORY = MemoryStorage()
+USER_STATE = UserState(MEMORY)
+CONVERSATION_STATE = ConversationState(MEMORY)
+
+# Create dialog
+DIALOG = LoginDialog(OAUTH_CONNECTION_NAME)
+
+# Create Bot
+BOT = MyBot(CONVERSATION_STATE, USER_STATE, DIALOG, auth_method="oauth")
 
 SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)
-
 
 async def messages(req: web.Request) -> web.Response:
     if "application/json" in req.headers["Content-Type"]:
@@ -43,7 +54,11 @@ async def messages(req: web.Request) -> web.Response:
     try:
         response = await ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
         if response:
-            return web.json_response(data=response.body, status=response.status)
+            if response.body is None:  
+                args = {'status': response.status}  
+            else:  
+                args = {'data': response.body, 'status': response.status}
+            return web.json_response(**args)
         return web.Response(status=201)
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
