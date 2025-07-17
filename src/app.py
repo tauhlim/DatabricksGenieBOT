@@ -21,7 +21,7 @@ from botbuilder.core import BotFrameworkAdapterSettings, BotFrameworkAdapter, Co
 from botbuilder.schema import Activity, ActivityTypes
 
 from bot import MyBot
-from const import APP_ID, APP_PASSWORD, OAUTH_CONNECTION_NAME
+from const import APP_ID, APP_PASSWORD, OAUTH_CONNECTION_NAME, AUTH_METHOD
 
 from login_dialog import LoginDialog
 
@@ -37,7 +37,7 @@ CONVERSATION_STATE = ConversationState(MEMORY)
 DIALOG = LoginDialog(OAUTH_CONNECTION_NAME)
 
 # Create Bot
-BOT = MyBot(CONVERSATION_STATE, USER_STATE, DIALOG, auth_method="oauth")
+BOT = MyBot(CONVERSATION_STATE, USER_STATE, DIALOG, auth_method=AUTH_METHOD)
 
 SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 ADAPTER = BotFrameworkAdapter(SETTINGS)

@@ -45,6 +45,13 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
 
 ## Setup and Usage
 
+### Configure your authentication mechanism
+1. Go to [`src/const.py`](./src/const.py) and update `AUTH_METHOD` to one of either `oauth` or `service_principal`.
+
+### Configure your Genie Spaces
+1. Please update [spaces.json](./spaces.json) with your own Genie Space IDs in your workspace.
+   1. Retrieve your Space ID from the Genie Space URL - see [docs here](https://learn.microsoft.com/en-us/azure/databricks/genie/conversation-api#-step-3-gather-details)
+
 ### Develop and test locally
 1. Python version 3.12
 2. Install the required dependencies listed in `requirements.txt`
@@ -57,11 +64,23 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
 
 1. Create App Service Plan
 1. Create Web App on the App Service Plan
+   1. Please use `PYTHON 3.12` when you select the python version
 1. Add Configuration to the web app 
-   1. `gunicorn --bind 0.0.0.0 --worker-class aiohttp.worker.GunicornWebWorker --timeout 1200 --chdir src app:app`
+   1. Set startup command to be:
+
+      ```gunicorn --bind 0.0.0.0 --worker-class aiohttp.worker.GunicornWebWorker --timeout 1200 --chdir src app:app```
+
    1. Set the necessary environment variables for authentication
+      1. Always required:
+         1. `DATABRICKS_HOST` (your Databricks Workspace URL)
+         1. `APP_ID` (your [Azure Bot's App ID](https://learn.microsoft.com/en-us/azure/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Cpython#to-get-your-app-or-tenant-id))
+         1. `APP_PASSWORD` (your [Azure Bot's Secret](https://learn.microsoft.com/en-us/azure/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Cpython#to-generate-a-new-password))
+      1. If you want to use [Service Principal Authentication](https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m) (optional otherwise)
+         1. `DATABRICKS_CLIENT_ID`
+         1. `DATABRICKS_CLIENT_SECRET` 
    1. Set environment variable `SCM_DO_BUILD_DURING_DEPLOYMENT` to `true` to ensure the dependencies are installed during deployment.
-1. Create Azure Bot. Add webapp endpoint details to Azure Bot: /api/messages.
+1. Create Azure Bot. Add webapp endpoint details to Azure Bot: `<webapp-url>/api/messages`
+   1. If you're going to use Oauth authentication, please refer to setup instructions [here](./databricks-oauth/readme.md)
 
 ## Screenshots
 
