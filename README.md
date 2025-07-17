@@ -45,8 +45,12 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
 
 ## Setup and Usage
 
-## Configure your authentication mechanism
+### Configure your authentication mechanism
 1. Go to [`src/const.py`](./src/const.py) and update `AUTH_METHOD` to one of either `oauth` or `service_principal`.
+
+### Configure your Genie Spaces
+1. Please update [spaces.json](./spaces.json) with your own Genie Space IDs in your workspace.
+   1. Retrieve your Space ID from the Genie Space URL - see [docs here](https://learn.microsoft.com/en-us/azure/databricks/genie/conversation-api#-step-3-gather-details)
 
 ### Develop and test locally
 1. Python version 3.12
