@@ -73,8 +73,8 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
    1. Set the necessary environment variables for authentication
       1. Always required:
          1. `DATABRICKS_HOST` (your Databricks Workspace URL)
-         1. `APP_ID` (your [Azure Bot's App ID](https://docs.azure.cn/en-us/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Ccsharp#to-get-your-app-or-tenant-id))
-         1. `APP_PASSWORD` (your [Azure Bot's Secret](https://docs.azure.cn/en-us/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Ccsharp#to-generate-a-new-password))
+         1. `APP_ID` (your [Azure Bot's App ID](https://learn.microsoft.com/en-us/azure/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Cpython#to-get-your-app-or-tenant-id))
+         1. `APP_PASSWORD` (your [Azure Bot's Secret](https://learn.microsoft.com/en-us/azure/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Cpython#to-generate-a-new-password))
       1. If you want to use [Service Principal Authentication](https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m) (optional otherwise)
          1. `DATABRICKS_CLIENT_ID`
          1. `DATABRICKS_CLIENT_SECRET` 
