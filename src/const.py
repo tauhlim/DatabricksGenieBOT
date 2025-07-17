@@ -19,6 +19,7 @@ OAUTH_CONNECTION_NAME = os.getenv("OAUTH_CONNECTION_NAME", "")
 WELCOME_MESSAGE = "Welcome to the Data Query Bot!"
 WAITING_MESSAGE = "Querying Genie for results..."
 SWITCHING_MESSAGE = "switch to @"
+AUTH_METHOD = "oauth" # can also be "service_principal"
 
 # Spaces mapping in json file
 with open("../spaces.json") as f:
