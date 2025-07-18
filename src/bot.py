@@ -85,32 +85,30 @@ class MyBot(ActivityHandler):
             await turn_context.send_activity("Logging you out.")
             self.genie_querier = GenieQuerier() # reset the genie querier
             return await turn_context.adapter.sign_out_user(turn_context, OAUTH_CONNECTION_NAME, None)            
-
-        elif not space_id or "@" in question.lower():
-            new_space_id = get_space_id(question)
-            if new_space_id == SPACE_NOT_FOUND:
-                return await turn_context.send_activity(SPACE_NOT_FOUND)
-                
-            # users want to switch spaces
-            if new_space_id != space_id:
-                space_id = new_space_id
-                conversation_id = None
-                self.space_ids[user_id] = new_space_id
-                self.conversation_ids.pop(user_id, None)
-                return await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
+        
         elif SWITCHING_MESSAGE in question.lower():
-            space_id = get_space_id(question)
-            if space_id == SPACE_NOT_FOUND:
-                return await turn_context.send_activity(SPACE_NOT_FOUND)
-                
-            self.space_ids[user_id] = space_id
-            # Reset conversation ID for the new space
-            self.conversation_ids.pop(user_id, None)
-            return await turn_context.send_activity(
-                f"Switched to space: {REVERSE_SPACES[space_id]}"
-            )
-            
+                space_id = get_space_id(question)
+                if space_id == SPACE_NOT_FOUND:
+                    return await turn_context.send_activity(SPACE_NOT_FOUND)
+                    
+                self.space_ids[user_id] = space_id
+                # Reset conversation ID for the new space
+                self.conversation_ids.pop(user_id, None)
+                await turn_context.send_activity(
+                    f"Switched to space: {REVERSE_SPACES[space_id]}")
         else:
+            if not space_id or "@" in question.lower():
+                new_space_id = get_space_id(question)
+                if new_space_id == SPACE_NOT_FOUND:
+                    return await turn_context.send_activity(SPACE_NOT_FOUND)
+                    
+                # users want to switch spaces
+                if new_space_id != space_id:
+                    space_id = new_space_id
+                    conversation_id = None
+                    self.space_ids[user_id] = new_space_id
+                    self.conversation_ids.pop(user_id, None)
+                    await turn_context.send_activity(f"Switched to space: {REVERSE_SPACES[space_id]}")
             try:
                 wait_activity = await turn_context.send_activity(
                     AdaptiveCardFactory.get_waiting_message()
