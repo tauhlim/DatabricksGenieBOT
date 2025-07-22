@@ -2,13 +2,13 @@
 
 ## Objective
 
-This project implements an experimental chatbot that interacts with Databricks' Genie API. The bot is designed to 
+This project implements an experimental chatbot that interacts with Databricks' Genie API. The bot is designed to
 facilitate conversations with Genie, Databricks' AI assistant, through a chat interface like MS Teams.
 
 ## Overview
 
-This experimental code creates a Genie BOT in Databricks using the Genie API. It's important to note that this is not 
-production-ready code and is not associated with or endorsed by any employer. 
+This experimental code creates a Genie BOT in Databricks using the Genie API. It's important to note that this is not
+production-ready code and is not associated with or endorsed by any employer.
 The code is intended to be used as-is for experimental and learning purposes only.
 
 ## Key Features
@@ -38,7 +38,7 @@ The main components of the system are:
 
 ## Disclaimer
 
-This code is experimental that is not yet supported by Databricks. 
+This code is experimental that is not yet supported by Databricks.
 It should not be used in production environments and is provided strictly for educational and experimental purposes.
 
 The code was tested in Azure Bot Framework that facilitates to integrate with any chatbot like MS Teams.
@@ -46,26 +46,28 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
 ## Setup and Usage
 
 ### Configure your authentication mechanism
+
 1. Go to [`src/const.py`](./src/const.py) and update `AUTH_METHOD` to one of either `oauth` or `service_principal`.
 
 ### Configure your Genie Spaces
+
 1. Please update [spaces.json](./spaces.json) with your own Genie Space IDs in your workspace.
    1. Retrieve your Space ID from the Genie Space URL - see [docs here](https://learn.microsoft.com/en-us/azure/databricks/genie/conversation-api#-step-3-gather-details)
 
 ### Develop and test locally
+
 1. Python version 3.12
 2. Install the required dependencies listed in `requirements.txt`
 3. Set up the necessary environment variables (`DATABRICKS_SPACE_ID`, `DATABRICKS_HOST`, etc.) in the `env.example` file, change the name to `.env`
 4. Run the `app.py` script to start the bot
 5. Test the bot with [Bot Framework Emulator](https://learn.microsoft.com/en-us/azure/bot-service/bot-service-debug-emulator?view=azure-bot-service-4.0&tabs=python)
 
-
 ### Deploy to Azure
 
 1. Create App Service Plan
 1. Create Web App on the App Service Plan
    1. Please use `PYTHON 3.12` when you select the python version
-1. Add Configuration to the web app 
+1. Add Configuration to the web app
    1. Set startup command to be:
 
       ```gunicorn --bind 0.0.0.0 --worker-class aiohttp.worker.GunicornWebWorker --timeout 1200 --chdir src app:app```
@@ -77,10 +79,10 @@ The code was tested in Azure Bot Framework that facilitates to integrate with an
          1. `APP_PASSWORD` (your [Azure Bot's Secret](https://learn.microsoft.com/en-us/azure/bot-service/bot-builder-authentication?view=azure-bot-service-4.0&tabs=userassigned%2Caadv2%2Cpython#to-generate-a-new-password))
       1. If you want to use [Service Principal Authentication](https://learn.microsoft.com/en-us/azure/databricks/dev-tools/auth/oauth-m2m) (optional otherwise)
          1. `DATABRICKS_CLIENT_ID`
-         1. `DATABRICKS_CLIENT_SECRET` 
+         1. `DATABRICKS_CLIENT_SECRET`
    1. Set environment variable `SCM_DO_BUILD_DURING_DEPLOYMENT` to `true` to ensure the dependencies are installed during deployment.
 1. Create Azure Bot. Add webapp endpoint details to Azure Bot: `<webapp-url>/api/messages`
-   1. If you're going to use Oauth authentication, please refer to setup instructions [here](./databricks-oauth/readme.md)
+   1. If you're going to use Oauth authentication, please refer to [setup instructions](./docs/databricks_oauth.md)
 
 ## Screenshots
 
