@@ -21,7 +21,7 @@ resource "azurerm_linux_web_app" "genie_app" {
     app_command_line = "gunicorn --bind 0.0.0.0 --worker-class aiohttp.worker.GunicornWebWorker --timeout 1200 --chdir src app:app"
   }
   app_settings = {
-    "APP_ID" = azuread_application.bot.id
+    "APP_ID" = azuread_application.bot.client_id
     "APP_PASSWORD" = azuread_application_password.bot.value
     "DATABRICKS_HOST" = var.databricks_host
     "OAUTH_CONNECTION_NAME" = "databricks"

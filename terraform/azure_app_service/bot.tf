@@ -4,11 +4,12 @@ data "azuread_client_config" "current" {}
 
 resource "azuread_application" "bot" {
   display_name = "${var.prefix}-bot-sp"
-  api {
-    requested_access_token_version = 2
-  }
+  sign_in_audience = "AzureADandPersonalMicrosoftAccount"
   identifier_uris = ["api://botid-${random_uuid.bot_id.result}"]
   owners          = [data.azuread_client_config.current.object_id]
+  api {
+    requested_access_token_version = 2
+  }  
 }
 
 resource "azurerm_bot_service_azure_bot" "genie_bot" {
