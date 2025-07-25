@@ -1,6 +1,7 @@
 variable "prefix" {
   description = "Prefix for all resources"
   type        = string
+  default     = "databricks-chatx"
 }
 
 variable "bot_name" {
@@ -30,6 +31,6 @@ variable "databricks_host" {
 }
 
 variable "databricks_profile" {
-  description = "Databricks profile for authentication"
+  description = "Databricks profile for authentication. This must be at account-level profile"
   type        = string
 }
