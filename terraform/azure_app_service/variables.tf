@@ -35,20 +35,20 @@ variable "databricks_profile" {
   type        = string
 }
 
-variable "auth_method"{
+variable "auth_method" {
   description = "auth method to use. oauth: for user authorization and data access, service-principal: for spn based data access"
   type        = string
-  default = "oauth"
+  default     = "oauth"
 }
 
 variable "databricks_spn_client_id" {
   description = "databricks service principal client id (required when auth method is set to 'service-principal')"
   type        = string
-  default = ""
+  default     = ""
 }
 
 variable "databricks_spn_client_secret" {
   description = "databricks service principal client secret (required when auth method is set to 'service-principal')"
   type        = string
-  default = ""
+  default     = ""
 }

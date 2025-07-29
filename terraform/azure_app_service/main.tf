@@ -24,13 +24,13 @@ resource "azurerm_linux_web_app" "genie_app" {
     }
   }
   app_settings = {
-    "APP_ID" = azuread_application.bot.client_id
-    "APP_PASSWORD" = azuread_application_password.bot.value
-    "DATABRICKS_HOST" = var.databricks_host
-    "OAUTH_CONNECTION_NAME" = "databricks"
+    "APP_ID"                         = azuread_application.bot.client_id
+    "APP_PASSWORD"                   = azuread_application_password.bot.value
+    "DATABRICKS_HOST"                = var.databricks_host
+    "OAUTH_CONNECTION_NAME"          = "databricks"
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "True"
-    "DATABRICKS_CLIENT_ID" = var.auth_method=="service-principal" ? var.databricks_spn_client_id : ""
-    "DATABRICKS_CLIENT_SECRET" = var.auth_method=="service-principal" ? var.databricks_spn_client_secret : ""
+    "DATABRICKS_CLIENT_ID"           = var.auth_method == "service-principal" ? var.databricks_spn_client_id : ""
+    "DATABRICKS_CLIENT_SECRET"       = var.auth_method == "service-principal" ? var.databricks_spn_client_secret : ""
   }
 
 }
