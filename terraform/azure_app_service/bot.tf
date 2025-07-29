@@ -24,13 +24,14 @@ resource "azurerm_bot_service_azure_bot" "genie_bot" {
 }
 
 resource "azurerm_bot_connection" "bot_aad" {
+  count = var.auth_method == "oauth" ? 1 : 0
   name                  = "databricks"
   bot_name              = azurerm_bot_service_azure_bot.genie_bot.name
   location              = azurerm_bot_service_azure_bot.genie_bot.location
   resource_group_name   = azurerm_resource_group.genie_rg.name
   service_provider_name = "oauth2" # Generic Oauth 2
-  client_id             = databricks_custom_app_integration.this.client_id
-  client_secret         = databricks_custom_app_integration.this.client_secret
+  client_id             = var.auth_method=="oauth" ? databricks_custom_app_integration.this[0].client_id : ""
+  client_secret         = var.auth_method=="oauth" ? databricks_custom_app_integration.this[0].client_secret : ""
   parameters = {
     "authorizationUrl" : "${var.databricks_host}/oidc/v1/authorize",
     "tokenUrl" : "${var.databricks_host}/oidc/v1/token",

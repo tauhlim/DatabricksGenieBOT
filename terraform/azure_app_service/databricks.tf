@@ -1,4 +1,5 @@
 resource "databricks_custom_app_integration" "this" {
+  count = var.auth_method == "oauth" ? 1 : 0
   name          = "Genie Chatbot"
   confidential  = true
   redirect_urls = ["https://token.botframework.com/.auth/web/redirect"]
